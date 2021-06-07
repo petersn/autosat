@@ -5,10 +5,10 @@
 %include <std_vector.i>
 
 %module tseytin %{
-    #include "tseytin.h"
+    #include "autosat_tseytin.h"
 %}
 
-%include "tseytin.h"
+%include "autosat_tseytin.h"
 
 namespace std {
     %template(vectori) vector<int>;

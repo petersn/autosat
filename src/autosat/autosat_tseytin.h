@@ -1,7 +1,6 @@
 // Tseytin transformations
 
-#ifndef CRUX_TSEYTIN_H
-#define CRUX_TSEYTIN_H
+#pragma once
 
 #include <cstdint>
 #include <vector>
@@ -25,4 +24,3 @@ static double* python_helper_size_t_to_double_ptr(size_t x) {
     return reinterpret_cast<double*>(x);
 }
 
-#endif

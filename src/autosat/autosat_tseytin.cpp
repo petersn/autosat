@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <cassert>
 #include <iostream>
-#include "tseytin.h"
+#include "autosat_tseytin.h"
 
 static uint64_t int_pow(uint64_t base, int exponent) {
     uint64_t result = 1;

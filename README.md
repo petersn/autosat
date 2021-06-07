@@ -69,6 +69,7 @@ You can request that a function reuse bits, if you'd like to constrain those bit
 def crummy_hash(a, b, c, d):
     for _ in range(8):
         a ^= b | (c & d)
+		a, b, c, d = b, c, d, a
     return a, b, c, d
 
 input0 = inst.new_vars(4)
