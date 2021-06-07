@@ -2,7 +2,7 @@ autosat
 =======
 
 A Python library for making SAT instances.
-The core tool is a decorator, `autosat.sat`, that automatically converts a function that takes bits as arguments and returns zero or more bits into CNF.
+The core tool is a decorator, `autosat.sat`, that automatically converts a function that takes bits as arguments into CNF.
 
 ```python
 import autosat
