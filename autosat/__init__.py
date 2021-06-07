@@ -4,7 +4,7 @@ autosat - Tools for making SAT instances
 
 import os, functools, itertools, time, json, hashlib, sqlite3, inspect
 import numpy as np
-import tseytin
+from . import tseytin
 import cvxopt.glpk
 
 cvxopt.solvers.options["show_progress"] = False
