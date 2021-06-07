@@ -19,10 +19,10 @@ def full_adder(a, b, carry_in):
 
 def add(a, b):
     assert len(a) == len(b)
-	# True and False are okay to pass into @autosat.sat functions.
+    # True and False are okay to pass into @autosat.sat functions.
     carry = False
     result = []
-	# Perform ripple-carry addition.
+    # Perform ripple-carry addition.
     for a_bit, b_bit in zip(a, b):
         sum_bit, carry = full_adder(a_bit, b_bit, carry)
         result.append(sum_bit)
@@ -54,10 +54,10 @@ You can also declare that some inputs to a function should be completely ruled o
 ```python
 @autosat.sat
 def mux_three(address_high, address_low, x, y, z):
-	address = 2 * address_high + address_low
-	if address == 3:
-		raise autosat.ImpossibleInputsError()
-	return [x, y, z][address]
+    address = 2 * address_high + address_low
+    if address == 3:
+        raise autosat.ImpossibleInputsError()
+    return [x, y, z][address]
 ```
 
 You can request that a function reuse bits, if you'd like to constrain those bits in multiple ways:
@@ -65,9 +65,9 @@ You can request that a function reuse bits, if you'd like to constrain those bit
 ```python
 @autosat.sat
 def crummy_hash(a, b, c, d):
-	for _ in range(8):
-		a ^= b | (c & d)
-	return a, b, c, d
+    for _ in range(8):
+        a ^= b | (c & d)
+    return a, b, c, d
 
 input0 = inst.new_vars(4)
 input1 = inst.new_vars(4)
