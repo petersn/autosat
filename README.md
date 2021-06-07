@@ -2,6 +2,7 @@ autosat
 =======
 
 A Python library for making SAT instances.
+The core tool is a decorator, `autosat.sat`, that automatically converts a function that takes bits as arguments and returns zero or more bits into CNF.
 
 ```python
 import autosat
@@ -42,12 +43,13 @@ c, overflow_bit = add(a, b)
 print(inst.clauses)
 ```
 
-Inside of the decorated function (for example `full_adder`) the input bits are either 0 or 1.
-The decorated function is called at every possible combination of inputs, and a lookup-table is built.
+The logic inside of a decorated function can be any arbitrary Python, as the arguments are simply either 0 or 1.
+Specifically, the decorated function is called at every possible combination of inputs, and a lookup-table is built.
 
 The next step is to convert this lookup-table into CNF clauses to implement the given functionality.
 To do this, the lookup-table is converted into a set cover instance (where each possible input/output pair to rule out is an element of the set, and each clause is a subset that rules out some input/output pairs), which is solved either heuristically or via integer linear programming if it's small enough.
 The solution is written to a persistent cache automatically, so the decorator should be fast on future invocations.
+This technique is tractible if the number of input + output bits of a decorated function is at most about 18ish.
 
 You can also declare that some inputs to a function should be completely ruled out:
 
