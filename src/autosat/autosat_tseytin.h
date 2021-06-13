@@ -1,9 +1,12 @@
 // Tseytin transformations
 
-#pragma once
+#ifndef AUTOSAT_TSEYTIN_H
+#define AUTOSAT_TSEYTIN_H
 
 #include <cstdint>
 #include <vector>
+
+extern bool do_logging;
 
 typedef std::vector<int> Clause;
 
@@ -15,12 +18,10 @@ struct Tseytin {
 
     int setup(int bits, char* behavior, int literal_limit);
     void fill_matrix(double* buffer);
-    void compute_greedy_solution();
 
     int heuristic_solve(int bits, char* behavior);
 };
 
-static double* python_helper_size_t_to_double_ptr(size_t x) {
-    return reinterpret_cast<double*>(x);
-}
+double* python_helper_size_t_to_double_ptr(size_t x);
 
+#endif

@@ -5,6 +5,19 @@
 #include <iostream>
 #include "autosat_tseytin.h"
 
+bool do_logging = false;
+
+static inline int popcount(uint64_t x) {
+    // Both clang and gcc recognize the following, and will emit a popcnt instruction
+    // at -msse4 and above, the same as we'd get with __builtin_popcountl.
+    int result = 0;
+    while (x) {
+        x &= x - 1;
+        result++;
+    }
+    return result;
+}
+
 static uint64_t int_pow(uint64_t base, int exponent) {
     uint64_t result = 1;
     for (int i = 0; i < exponent; i++)
@@ -30,19 +43,24 @@ static bool test_compatible(uint64_t setting_max, const Clause& c, char* behavio
     return true;
 }
 
-static bool test_useful(uint64_t setting_max, const Clause& c, const std::vector<uint64_t>& settings_to_rule_out) {
+static bool test_useful(
+    uint64_t setting_max,
+    const Clause& c,
+    const std::vector<uint64_t>& settings_to_rule_out
+) {
     for (uint64_t bit_setting : settings_to_rule_out)
         if (not test_clause_behavior(c, bit_setting))
             return true;
     return false;
 }
 
-static bool test_compatible_and_useful(uint64_t setting_max, const Clause& c, char* behavior, const std::vector<uint64_t>& settings_to_rule_out) {
-//    if (not test_compatible(setting_max, c, behavior))
-//        return false;
-//    return test_useful(setting_max, c, settings_to_rule_out);
-//    return test_compatible(setting_max, c, behavior) and test_useful(setting_max, c, settings_to_rule_out);
-    return test_useful(setting_max, c, settings_to_rule_out) and test_compatible(setting_max, c, behavior);
+static bool test_compatible_and_useful(
+    uint64_t setting_max,
+    const Clause& c,
+    char* behavior,
+    const std::vector<uint64_t>& settings_to_rule_out
+) {
+    return test_useful(setting_max, c, settings_to_rule_out) && test_compatible(setting_max, c, behavior);
 }
 
 int Tseytin::setup(int bits, char* behavior, int literal_limit) {
@@ -85,18 +103,12 @@ int Tseytin::setup(int bits, char* behavior, int literal_limit) {
     int mat_height = all_feasible.size();
     int mat_width = settings_to_rule_out.size();
 
-    std::cout << "Memory for approximate solvers: " << (((double)mat_width * (double)mat_height / 8) / 1024.0 / 1024.0 / 1024.0) << " GiB" << std::endl;
-    std::cout << "C++ Mat:    " << mat_width << "x" << mat_height << std::endl;
-//    std::cout << "Found " << mat_height << " clauses." << std::endl;
+    if (do_logging) {
+        std::cout << "Memory for approximate solvers: " << (((double)mat_width * (double)mat_height / 8) / 1024.0 / 1024.0 / 1024.0) << " GiB" << std::endl;
+        std::cout << "C++ Mat:    " << mat_width << "x" << mat_height << std::endl;
+    }
 
-/*
-*/
-//    for (int 
-//    buffer[]
-
-    return all_feasible.size(); //mat_height;
-//    return false;
-//    return bits == *behavior;
+    return all_feasible.size();
 }
 
 void Tseytin::fill_matrix(double* buffer) {
@@ -108,7 +120,8 @@ void Tseytin::fill_matrix(double* buffer) {
         for (int j = 0; j < mat_width; j++)
             buffer[i + j * mat_height] = test_clause_behavior(all_feasible[i], settings_to_rule_out[j]) - 1;
 
-    std::cout << "Matrix filled." << std::endl;
+    if (do_logging)
+        std::cout << "Matrix filled." << std::endl;
 }
 
 static inline void set_bit(uint64_t* data, int bit_index) {
@@ -123,75 +136,12 @@ static inline bool test_bit(uint64_t* data, int bit_index) {
     return data[bit_index / 64] & (1ull << (bit_index % 64));
 }
 
-void Tseytin::compute_greedy_solution() {
-    int mat_height = all_feasible.size();
-    int mat_width = settings_to_rule_out.size();
-
-    int row_width = (mat_width + 63) / 64;
-
-    std::vector<uint64_t> bit_matrix(row_width * mat_height);
-
-    // Fill in the coverage matrix.
-    for (int i = 0; i < mat_height; i++) {
-        uint64_t* row_ptr = &bit_matrix[row_width * i];
-        for (int j = 0; j < mat_width; j++)
-            if (not test_clause_behavior(all_feasible[i], settings_to_rule_out[j]))
-                set_bit(row_ptr, j);
-    }
-
-    std::cout << "Matrix filled." << std::endl;
-
-    // Find a greedy solution.
-    std::vector<uint64_t> behavior_to_remove(row_width);
-    for (uint64_t& x : behavior_to_remove)
-        x = -1ull;
-    for (int i = mat_width; i < row_width * 64; i++)
-        clear_bit(&behavior_to_remove[0], i);
-
-    std::cout << "Remaining bits:" << std::flush;
-
-    while (true) {
-        // Find the highest pop-count row.
-        int best_row = -1, best_row_score = -1;
-        for (int row = 0; row < mat_height; row++) {
-            uint64_t* row_ptr = &bit_matrix[row_width * row];
-            int row_score = 0;
-            for (int i = 0; i < row_width; i++)
-                row_score += __builtin_popcountl(row_ptr[i] & behavior_to_remove[i]);
-            if (row_score > best_row_score) {
-                best_row = row;
-                best_row_score = row_score;
-            }
-        }
-        assert(best_row != -1);
-        uint64_t* row_ptr = &bit_matrix[row_width * best_row];
-        greedy_solution.push_back(best_row);
-        uint64_t any = 0;
-        for (int i = 0; i < row_width; i++) {
-            uint64_t new_value = behavior_to_remove[i] & ~row_ptr[i];
-            behavior_to_remove[i] = new_value;
-            any |= new_value;
-        }
-        if (not any)
-            break;
-        int count = 0;
-        for (int i = 0; i < row_width; i++)
-            count += __builtin_popcountl(behavior_to_remove[i]);
-        std::cout << " " << count << std::flush;
-    }
-    std::cout << std::endl;
-
-    std::cout << "Solution computed of length: " << greedy_solution.size() << std::endl;
-}
-
 int Tseytin::heuristic_solve(int bits, char* behavior) {
-    std::cout << "Heuristic solve. Bits: " << bits << std::endl;
+    if (do_logging)
+        std::cout << "Heuristic solve. Bits: " << bits << std::endl;
 
     // Find every matching clause.
-    uint64_t clause_count_max = int_pow(3, bits);
     uint64_t setting_max = int_pow(2, bits);
-
-//    std::vector<int> chosen_clauses(bits);
 
     std::vector<std::vector<Clause>> positive_clauses_by_length(bits + 1);
 
@@ -210,7 +160,8 @@ int Tseytin::heuristic_solve(int bits, char* behavior) {
     int mat_width = settings_to_rule_out.size();
     int row_width = (mat_width + 63) / 64;
 
-    std::cout << "  Mat width: " << mat_width << std::endl;
+    if (do_logging)
+        std::cout << "  Mat width: " << mat_width << std::endl;
 
     // Find a greedy solution.
     std::vector<uint64_t> behavior_to_remove(row_width);
@@ -224,7 +175,7 @@ int Tseytin::heuristic_solve(int bits, char* behavior) {
         // Determine if we're done.
         int weight = 0;
         for (uint64_t x : behavior_to_remove)
-            weight += __builtin_popcountl(x);
+            weight += popcount(x);
         if (weight == 0)
             break;
         current_max_length++;
@@ -232,10 +183,14 @@ int Tseytin::heuristic_solve(int bits, char* behavior) {
 
         // Filter down the settings_to_rule_out and behavior_to_remove mask.
         std::vector<uint64_t> new_settings_to_rule_out;
-        for (int i = 0; i < settings_to_rule_out.size(); i++)
+        for (uint64_t i = 0; i < settings_to_rule_out.size(); i++)
             if (test_bit(&behavior_to_remove[0], i))
                 new_settings_to_rule_out.push_back(settings_to_rule_out[i]);
-        std::cout << "    [" << heuristic_solution.size() << "] clause_length=" << current_max_length << " weight: " << weight << " length: " << settings_to_rule_out.size() << "->" << new_settings_to_rule_out.size() << std::endl;
+        if (do_logging) {
+            std::cout << "    [" << heuristic_solution.size() << "] clause_length=" << current_max_length
+                << " weight: " << weight << " length: " << settings_to_rule_out.size()
+                << "->" << new_settings_to_rule_out.size() << std::endl;
+        }
 
         settings_to_rule_out = std::move(new_settings_to_rule_out);
         mat_width = settings_to_rule_out.size();
@@ -250,40 +205,38 @@ int Tseytin::heuristic_solve(int bits, char* behavior) {
         std::vector<Clause> feasible_clauses_of_this_length;
         int polarity_max = int_pow(2, current_max_length);
         Clause c(current_max_length);
-        std::cout << "      Filtering down from " << positive_clauses_by_length[current_max_length].size() << " clauses by " << polarity_max << " polarities." << std::endl;
+        if (do_logging) {
+            std::cout << "      Filtering down from " <<positive_clauses_by_length[current_max_length].size()
+            << " clauses by " << polarity_max << " polarities." << std::endl;
+        }
         for (const Clause& d : positive_clauses_by_length[current_max_length]) {
             // Try all polarities of literals in this clause.
             for (int i = 0; i < polarity_max; i++) {
                 for (int j = 0; j < current_max_length; j++)
                     c[j] = (i >> j) & 1 ? d[j] : -d[j];
-//                std::cout << "Testing:";
-//                for (auto x : c)
-//                    std::cout << " " << x;
-//                std::cout << std::endl;
                 if (test_compatible_and_useful(setting_max, c, behavior, settings_to_rule_out))
                     feasible_clauses_of_this_length.push_back(c);
             }
         }
 
-//        std::cout << "    Feasible count: " << feasible_clauses_of_this_length.size() << std::endl;
-        if (feasible_clauses_of_this_length.size() == 0) {
+        if (feasible_clauses_of_this_length.size() == 0)
             continue;
-        }
 
         int mat_height = feasible_clauses_of_this_length.size();
 
         std::vector<uint64_t> bit_matrix(row_width * mat_height);
 
         // Fill in the coverage matrix.
-        std::cout << "      Fill in effort: " << mat_width << "x" << mat_height << std::endl;
+        if (do_logging)
+            std::cout << "      Fill in effort: " << mat_width << "x" << mat_height << std::endl;
         for (int i = 0; i < mat_height; i++) {
             uint64_t* row_ptr = &bit_matrix[row_width * i];
             for (int j = 0; j < mat_width; j++)
                 if (not test_clause_behavior(feasible_clauses_of_this_length[i], settings_to_rule_out[j]))
                     set_bit(row_ptr, j);
         }
-
-        std::cout << "      Remaining bits:" << std::flush;
+        if (do_logging)
+            std::cout << "      Remaining bits:" << std::flush;
 
         while (true) {
             // Find the highest pop-count row.
@@ -292,7 +245,7 @@ int Tseytin::heuristic_solve(int bits, char* behavior) {
                 uint64_t* row_ptr = &bit_matrix[row_width * row];
                 int row_score = 0;
                 for (int i = 0; i < row_width; i++)
-                    row_score += __builtin_popcountl(row_ptr[i] & behavior_to_remove[i]);
+                    row_score += popcount(row_ptr[i] & behavior_to_remove[i]);
                 if (row_score > best_row_score) {
                     best_row = row;
                     best_row_score = row_score;
@@ -314,12 +267,17 @@ int Tseytin::heuristic_solve(int bits, char* behavior) {
                 break;
             int count = 0;
             for (int i = 0; i < row_width; i++)
-                count += __builtin_popcountl(behavior_to_remove[i]);
-            std::cout << " " << count << std::flush;
+                count += popcount(behavior_to_remove[i]);
+            if (do_logging)
+                std::cout << " " << count << std::flush;
         }
-        std::cout << std::endl;
+        if (do_logging)
+            std::cout << std::endl;
     }
 
     return 0;
 }
 
+double* python_helper_size_t_to_double_ptr(size_t x) {
+    return reinterpret_cast<double*>(x);
+}
