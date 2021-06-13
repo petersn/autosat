@@ -8,6 +8,6 @@ setup(
     packages=["autosat"],
     license="CC0",
     long_description="Library for making SAT instances",
-	ext_modules=["autosat_tseytin"],
+#	ext_modules=["autosat_tseytin"],
 )
 
