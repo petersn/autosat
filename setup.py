@@ -4,7 +4,7 @@ from distutils.core import setup, Extension
 
 setup(
     name="autosat",
-    version="0.1.0",
+    version="0.0.0",
     packages=["autosat"],
     license="CC0",
     long_description="Library for making SAT instances",

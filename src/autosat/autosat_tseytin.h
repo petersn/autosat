@@ -22,6 +22,8 @@ struct Tseytin {
     int heuristic_solve(int bits, char* behavior);
 };
 
+void set_sat_conversion_printing(bool do_logging);
+
 double* python_helper_size_t_to_double_ptr(size_t x);
 
 #endif

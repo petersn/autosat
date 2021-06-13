@@ -7,6 +7,10 @@
 
 bool do_logging = false;
 
+void set_sat_conversion_printing(bool _do_logging) {
+    do_logging = _do_logging;
+}
+
 static inline int popcount(uint64_t x) {
     // Both clang and gcc recognize the following, and will emit a popcnt instruction
     // at -msse4 and above, the same as we'd get with __builtin_popcountl.

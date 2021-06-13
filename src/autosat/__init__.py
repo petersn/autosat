@@ -17,9 +17,6 @@ from . import autosat_tseytin
 
 PYSAT_IMPORT_WARNING = "\x1b[91m----> To install pysat: pip install python-sat (pysat is an unrelated module!) <----\x1b[0m"
 
-def print_info():
-    autosat_tseytin.do_logging = True
-
 
 class TseytinDB:
     def __init__(self, db_path):
@@ -111,6 +108,15 @@ class Var:
         self.instance.add_clause(~self, other, result)
         self.instance.add_clause(~self, ~other, ~result)
         return result
+
+    def __rand__(self, other):
+        return self.__and__(other)
+
+    def __ror__(self, other):
+        return self.__or__(other)
+
+    def __rxor__(self, other):
+        return self.__xor__(other)
 
     def make_equal(self, other: Union["Var", bool]):
         if isinstance(other, bool):
