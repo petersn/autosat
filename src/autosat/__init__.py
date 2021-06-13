@@ -5,9 +5,9 @@ autosat - Tools for making SAT instances
 import os, functools, itertools, time, json, hashlib, sqlite3, inspect
 import numpy as np
 from . import tseytin
-import cvxopt.glpk
+#import cvxopt.glpk
 
-cvxopt.solvers.options["show_progress"] = False
+#cvxopt.solvers.options["show_progress"] = False
 
 db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache_tseytin.db")
 
