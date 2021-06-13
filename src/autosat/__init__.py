@@ -114,7 +114,7 @@ class Function:
         start_time = time.time()
         t = tseytin.Tseytin()
 
-        if total_bits > 15:
+        if True or total_bits > 15:
             print("Using length-iterative greedy solver.")
             t.heuristic_solve(total_bits, behavior.decode())
             all_clauses = [list(clause) for clause in t.heuristic_solution]
