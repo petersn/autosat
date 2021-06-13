@@ -4,7 +4,7 @@
 %include <std_string.i>
 %include <std_vector.i>
 
-%module tseytin %{
+%module autosat_tseytin %{
     #include "autosat_tseytin.h"
 %}
 

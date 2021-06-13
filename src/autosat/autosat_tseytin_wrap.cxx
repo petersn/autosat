@@ -2696,16 +2696,16 @@ static swig_module_info swig_module = {swig_types, 23, 0, 0, 0, 0};
 #define SWIG_TypeQuery SWIG_Python_TypeQuery
 
 /*-----------------------------------------------
-              @(target):= _tseytin.so
+              @(target):= _autosat_tseytin.so
   ------------------------------------------------*/
 #if PY_VERSION_HEX >= 0x03000000
-#  define SWIG_init    PyInit__tseytin
+#  define SWIG_init    PyInit__autosat_tseytin
 
 #else
-#  define SWIG_init    init_tseytin
+#  define SWIG_init    init_autosat_tseytin
 
 #endif
-#define SWIG_name    "_tseytin"
+#define SWIG_name    "_autosat_tseytin"
 
 #define SWIGVERSION 0x040001 
 #define SWIG_VERSION SWIGVERSION
