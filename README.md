@@ -1,7 +1,9 @@
 autosat
 =======
 
-A Python library for making SAT instances.
+**Install with:** `pip install autosat`
+
+A Python library for easily making SAT instances, by just decorating your functions.
 The core tool is a decorator, `autosat.sat`, that automatically converts a function that takes bits as arguments into CNF.
 
 ```python
