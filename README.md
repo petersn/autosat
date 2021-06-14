@@ -39,8 +39,26 @@ a = inst.new_vars(32)
 b = inst.new_vars(32)
 c, overflow_bit = add(a, b)
 
-# Gives the list of clauses like: [[1, 2, -3], [2, -4, -5], ...]
+# Gives the list of clauses like: [[-1, -2, -3], [1, 2, -3], [1, -2, 3], ...]
 print(inst.clauses)
+
+# Gives a string like: "p cnf 132 454\n-1 -2 -3 0\n1 2 -3 0\n1 -2 3 0\n ..."
+print(inst.to_dimacs())
+
+# If you have pysat installed (pip install python-sat) you can also ask it for solutions:
+model = inst.solve(
+    solver_name="glucose4",
+    decode_model=False,
+)
+# Gives output like: {1: False, 2: False, 3: False, ...} or the string "UNSAT"
+print(model)
+
+# Gives the value of the variable in the model.
+print("x =", x.decode(model))
+
+# Decodes the numerical value that a list of variables takes on in the model.
+# Will print 0 in this case, because a = 0x00000000 in the solution.
+print("a =", autosat.decode_number(a, model))
 ```
 
 The logic inside of a decorated function can be any arbitrary Python, as the arguments are simply either 0 or 1.
@@ -61,6 +79,8 @@ def mux_three(address_high, address_low, x, y, z):
         raise autosat.ImpossibleInputsError()
     return [x, y, z][address]
 ```
+
+Alternatively, you can say that you don't care about the output values for some input values by raising `autosat.DontCare()`.
 
 You can request that a function reuse bits, if you'd like to constrain those bits in multiple ways:
 

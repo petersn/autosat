@@ -168,10 +168,11 @@ class Instance:
         return var
 
     def new_vars(self, count: int, name=None, *, is_number=False) -> List[Var]:
-        variables = [self.new_var(name) for _ in range(count)]
         if is_number:
             assert name is not None, "The is_number flag changes how we decode the model, and is meaningless without a name"
-            assert name not in self.named_numbers, "Duplicate name: %r" % (name,)
+            assert name not in self.named_numbers, "Duplicate name for named number: %r" % (name,)
+        variables = [self.new_var(name) for _ in range(count)]
+        if is_number:
             self.named_numbers[name] = variables
         return variables
 

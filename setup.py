@@ -7,16 +7,16 @@ setup(
     version="0.0.0",
     packages=["autosat"],
     license="CC0",
-    long_description="Library for making SAT instances",
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
     ext_modules=[
         Extension(
             "_autosat_tseytin",
             sources=[
-				"src/autosat/autosat_tseytin.i",
+                "src/autosat/autosat_tseytin.i",
                 "src/autosat/autosat_tseytin.cpp",
-                #"src/autosat/autosat_tseytin_wrap.cxx",
             ],
-			swig_opts=["-c++"],
+            swig_opts=["-c++"],
         ),
     ],
 )
