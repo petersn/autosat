@@ -11,9 +11,27 @@ import autosat
 
 inst = autosat.Instance()
 
+x, y, z = inst.new_vars(3)
+# Bitwise operations create new variables and clauses, and work with bools.
+w = ~((True ^ (y | ~z)) & x)
+# You can also add clauses manually.
+inst.add_clause(x, y, ~z)
+
+
+# However, the real power of autosat is automatically turning functions into clauses.
+
 @autosat.sat
-def xor(x, y):
-    return x ^ y
+def silly_operation(a: bool, b: bool, c: bool, d: bool) -> bool:
+    num = 2*c + d
+    for _ in range(num):
+        a, b = b, a ^ [c, d][b]
+    return a
+
+# Here silly_operation automatically emits clauses to implement the above functionality.
+silly_result = silly_operation(x, y, z, w)
+
+
+# Often it makes sense to @autosat.sat inner logic, then 
 
 @autosat.sat
 def full_adder(a, b, carry_in):
@@ -31,15 +49,9 @@ def add(a, b):
         result.append(sum_bit)
     return result, carry
 
-x, y = inst.new_vars(2)
-z = xor(x, y)
-
-# You can also add clauses manually.
-inst.add_clause(x, y, ~z)
-
-a = inst.new_vars(32)
-b = inst.new_vars(32)
-c, overflow_bit = add(a, b)
+num_a = inst.new_vars(32)
+num_b = inst.new_vars(32)
+num_sum, overflow_bit = add(num_a, num_b)
 
 # Gives the list of clauses like: [[-1, -2, -3], [1, 2, -3], [1, -2, 3], ...]
 print(inst.clauses)
@@ -56,11 +68,11 @@ model = inst.solve(
 print(model)
 
 # Gives the value of the variable in the model.
-print("x =", x.decode(model))
+print("w =", w.decode(model))
 
 # Decodes the numerical value that a list of variables takes on in the model.
-# Will print 0 in this case, because a = 0x00000000 in the solution.
-print("a =", autosat.decode_number(a, model))
+# Will print 0 in this case, because num_a = 0x00000000 in the solution.
+print("num_a =", autosat.decode_number(num_a, model))
 ```
 
 The logic inside of a decorated function can be any arbitrary Python, as the arguments are simply either 0 or 1.
@@ -69,7 +81,7 @@ Specifically, the decorated function is called at every possible combination of 
 The next step is to convert this lookup-table into CNF clauses to implement the given functionality.
 To do this, the lookup-table is converted into a set cover instance (where each possible input/output pair to rule out is an element of the set, and each clause is a subset that rules out some input/output pairs), which is solved either heuristically or via integer linear programming if it's small enough.
 The solution is written to a persistent cache automatically, so the decorator should be fast on future invocations.
-This technique is tractible if the number of input + output bits of a decorated function is at most about 18ish.
+This technique is tractable if the number of input + output bits of a decorated function is at most about 18ish.
 
 You can also declare that some inputs to a function should be completely ruled out:
 
