@@ -12,7 +12,7 @@ import inspect
 import warnings
 import logging
 import sqlite3
-from typing import List, Dict, Tuple, Union, Iterable
+from typing import List, Dict, Tuple, Union, Iterable, Optional
 from . import autosat_tseytin
 
 PYSAT_IMPORT_WARNING = \
@@ -28,6 +28,10 @@ class TseytinDB:
             create table if not exists tseytin
                 (table_hash text, clauses text)
         """)
+
+    def count_entries(self):
+        (count,), = self.conn.execute("select count(*) from tseytin")
+        return count
 
     def get_clauses(self, table_hash):
         for _, clauses in self.conn.execute("select * from tseytin where table_hash = ?", (table_hash,)):
@@ -66,10 +70,9 @@ def get_db():
 
 
 class Var:
-    def __init__(self, instance: "Instance", number: int, name):
+    def __init__(self, instance: "Instance", number: int):
         self.instance = instance
         self.number = number
-        self.name = name
 
     def _get_polarity(self, polarity: bool):
         return self if polarity else ~self
@@ -79,7 +82,7 @@ class Var:
             "Variables must be from the same Instance"
 
     def __invert__(self):
-        return Var(self.instance, -self.number, self.name)
+        return Var(self.instance, -self.number)
 
     def __and__(self, other: Union["Var", bool]) -> "Var":
         self._check_instance(other)
@@ -144,48 +147,32 @@ class Var:
         if -self.number in model:
             return not model[-self.number]
         return False
-        #raise KeyError("Variable %r not found in model" % self)
 
     def __bool__(self):
         raise RuntimeError("You can't branch on a SAT variable in Python -- does what you're trying to do make sense?")
 
     def __repr__(self):
-        if self.name is None:
-            return "⟨%i⟩" % self.number
-        return "⟨%i: %s⟩" % (self.number, self.name)
+        return f"⟨{self.number}⟩"
 
 
 class Instance:
-    def __init__(self):
-        self.variables = {}
-        self.clauses = []
-        self.named_numbers = {}
-        self.named_collections = {}
-        self.constants = [None, None]
+    def __init__(self, *, variables=None, clauses=None, constants=None):
+        self.variables = variables or []
+        self.clauses = clauses or []
+        self.constants = constants or [None, None]
 
-    def new_var(self, name=None) -> Var:
+    def new_var(self) -> Var:
         number = len(self.variables) + 1
-        var = Var(self, number, name)
-        self.variables[number] = var
-        if name is not None:
-            if name not in self.named_collections:
-                self.named_collections[name] = []
-            self.named_collections[name].append(var)
-        return var
+        self.variables.append(Var(self, number))
+        return self.variables[-1]
 
-    def new_vars(self, count: int, name=None, *, is_number=False) -> List[Var]:
-        if is_number:
-            assert name is not None, "The is_number flag changes how we decode the model, and is meaningless without a name"
-            assert name not in self.named_numbers, f"Duplicate name for named number: {name}"
-        variables = [self.new_var(name) for _ in range(count)]
-        if is_number:
-            self.named_numbers[name] = variables
-        return variables
+    def new_vars(self, count: int) -> List[Var]:
+        return [self.new_var() for _ in range(count)]
 
     def get_constant(self, truth: bool) -> Var:
         assert isinstance(truth, bool)
         if self.constants[truth] is None:
-            var = self.constants[truth] = self.new_var(name=("false", "true")[truth])
+            var = self.constants[truth] = self.new_var()
             self.add_clause(var._get_polarity(truth))
         return self.constants[truth]
 
@@ -210,7 +197,7 @@ class Instance:
         cnf.from_clauses(self.clauses)
         return cnf
 
-    def solve(self, solver_name="glucose4", decode_model=True):
+    def solve(self, solver_name="glucose4"):
         try:
             import pysat.solvers
         except ImportError:
@@ -221,17 +208,7 @@ class Instance:
         if not satisfiable:
             return "UNSAT"
         model = {abs(var): var > 0 for var in solver.get_model()}
-        if decode_model:
-            model = self.decode_model(model)
         return model
-
-    def decode_model(self, model):
-        results = {}
-        for name, variables in self.named_collections.items():
-            results[name] = [var.decode(model) for var in variables]
-        for name, variables in self.named_numbers.items():
-            results[name] = decode_number(variables, model)
-        return results
 
 
 def decode_number(variables: Iterable[Var], model: Dict[int, bool]) -> int:
@@ -240,6 +217,31 @@ def decode_number(variables: Iterable[Var], model: Dict[int, bool]) -> int:
 def _log2(x):
     assert x & (x - 1) == 0, "Number isn't a power of two"
     return x.bit_length() - 1
+
+def function_to_behavior_table(
+    f,
+    input_bit_count: int,
+    output_bit_count: int,
+) -> bytearray:
+    total_bits = input_bit_count + output_bit_count
+    behavior = bytearray(2**total_bits)
+    all_possible_outputs = list(itertools.product((0, 1), repeat=output_bit_count))
+    for input_comb in itertools.product((0, 1), repeat=input_bit_count):
+        try:
+            r = f(*input_comb)
+            if isinstance(r, int):
+                r = r,
+            output_combs = [tuple(r)]
+        except ImpossibleInputsError:
+            output_combs = []
+        except DontCare:
+            output_combs = all_possible_outputs
+
+        for output_comb in output_combs:
+            assert all(i in (0, 1) for i in output_comb), "Results from your function must be boolean"
+            comb_as_number = sum(x * 2**i for i, x in enumerate(input_comb + output_comb))
+            behavior[comb_as_number] = 1
+    return behavior
 
 def behavior_table_to_clauses(
     behavior: bytes,
@@ -300,7 +302,7 @@ def behavior_table_to_clauses(
         ]
 
     if use_cache:
-        db.set_clauses(table_hash, all_clauses)
+        get_db().set_clauses(table_hash, all_clauses)
 
     logging.info("Compiled in: %.2fs" % (time.time() - start_time))
     logging.info("Solution: %s" % all_clauses)
@@ -317,7 +319,7 @@ def sat_args_helper(
     assert bits_out is None or len(bits_out) == output_count, \
         f"Wrong number of output bits: expected {output_count}, got {len(bits_out)}"
 
-    instances = {bit.instance for bit in bits if not isinstance(bit, bool)}
+    instances = {bit.instance for bit in bits_in if not isinstance(bit, bool)}
     assert len(instances) != 0, "You can't have all arguments to an @autosat.sat function be bool," \
         " because then we don't know what instance to build into (try using instance.get_constant instead)"
     assert len(instances) == 1, "All variables into a function must come from the same instance"
@@ -336,9 +338,11 @@ def sat_args_helper(
     return instance, vars_in, vars_out
 
 
-class ImpossibleInputsError(Exception): pass
+class ImpossibleInputsError(Exception):
+    pass
 
-class DontCare(Exception): pass
+class DontCare(Exception):
+    pass
 
 
 class Function:
@@ -348,7 +352,7 @@ class Function:
         self.output_bit_count = output_bit_count
         self.clauses = clauses
 
-    def call_underlying_function(self, *bits):
+    def call_underlying_function(self, *bits) -> Iterable[int]:
         try:
             return self.f(*bits)
         except DontCare:
@@ -366,62 +370,63 @@ class Function:
             ))
         return vars_out
 
-def sat(f=None, /, lazy=False, input_bits=None, output_bits=None, input_number=False, output_number=False):
-    assert (not input_number) or input_bits is not None, \
-        "If the function takes in its argument as a number, then you must specify the number of bits"
-    assert (not output_number) or output_bits is not None, \
-        "If the function returns its result as a number, then you must specify the number of bits"
-
+def sat(
+    f=None,
+    /,
+    lazy: bool = False,
+    input_bit_count: Optional[int] = None,
+    output_bit_count: Optional[int] = None,
+    use_cache: bool = True,
+):
     def decorator(f):
-        return Function()
+        bits_in = input_bit_count
+        if bits_in is None:
+            arg_spec = inspect.signature(f)
+            bits_in = len(arg_spec.parameters)
+            assert bits_in > 0, "Zero input functions aren't supported right now"
+
+        bits_out = output_bit_count
+        if bits_out is None:
+            promoting_single_bit = False
+            for bit_pattern in itertools.product((0, 1), repeat=bits_in):
+                try:
+                    r = f(*bit_pattern)
+                    if isinstance(r, int):
+                        promoting_single_bit = True
+                        bits_out = 1
+                        break
+                    bits_out = len(r)
+                    break
+                except (ImpossibleInputsError, DontCare):
+                    continue
+            assert bits_out is not None, "Your function must return a value in at least one case"
+
+        behavior = function_to_behavior_table(f, bits_in, bits_out)
+        clauses = behavior_table_to_clauses(behavior, use_cache=use_cache)
+
+        return Function(
+            f,
+            bits_in,
+            bits_out,
+            clauses,
+        )
+
+    if lazy:
+        real_decorator = decorator
+
+        def decorator(f):
+            wrapped_function: Optional[Function] = None
+            @functools.wraps(f)
+            def wrapper(*bits_in, outs=None):
+                nonlocal wrapped_function
+                if wrapped_function is None:
+                    wrapped_function = real_decorator(f)
+                return wrapped_function(*bits_in, outs=outs)
+            return wrapper
 
     # If f is None then we've been called like @autosat.sat(options=...), and need to *return* the decorator.
     # If f isn't None, then we've been called like @autosat.sat, and need to just immediately decorate.
     return decorator if f is None else decorator(f)
-
-def sat(f):
-    arg_spec = inspect.signature(f)
-    input_count = len(arg_spec.parameters)
-    assert input_count > 0, "Zero input functions aren't supported right now"
-
-    output_count = 0
-    promoting_single_bit = False
-    for bit_pattern in itertools.product([0, 1], repeat=input_count):
-        try:
-            r = f(*bit_pattern)
-            if isinstance(r, int):
-                promoting_single_bit = True
-                output_count = 1
-                break
-            output_count = len(r)
-            break
-        except (ImpossibleInputsError, DontCare):
-            continue
-    sat_func = Function(f, input_count, output_count)
-
-    @functools.wraps(f)
-    def wrapper(*args, outs=None):
-        for arg in args:
-            if not isinstance(arg, (Var, bool)):
-                raise TypeError("Arguments to a @autosat.sat function must either be Var or bool")
-        instances = {arg.instance for arg in args if not isinstance(arg, bool)}
-        assert len(instances) != 0, "You can't have all arguments to an @autosat.sat function be bool," \
-            " because then we don't know what instance to build into (try using instance.get_constant instead)"
-        assert len(instances) == 1, "All variables into a function must come from the same instance"
-        instance = instances.pop()
-        args = [
-            instance.get_constant(arg) if isinstance(arg, bool) else arg
-            for arg in args
-        ]
-        if outs is None:
-            outs = [instance.new_var() for _ in range(output_count)]
-        sat_func.apply(instance, args, outs)
-        if promoting_single_bit:
-            bit, = outs
-            return bit
-        return outs
-
-    return wrapper
 
 @sat(lazy=True)
 def full_adder(a, b, carry_in):
