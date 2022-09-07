@@ -13,8 +13,8 @@ setup(
         Extension(
             "_autosat_tseytin",
             sources=[
-                "src/autosat/autosat_tseytin.i",
-                "src/autosat/autosat_tseytin.cpp",
+                "autosat/autosat_tseytin.i",
+                "autosat/autosat_tseytin.cpp",
             ],
             swig_opts=["-c++"],
         ),
